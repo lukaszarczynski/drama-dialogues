@@ -3,9 +3,6 @@ from typing import List
 
 
 class State(metaclass=abc.ABCMeta):
-    # def __init__(self):
-    #     print(self.__class__.__name__)
-
     @staticmethod
     @abc.abstractmethod
     def should_transit_to(line: str) -> bool:
@@ -95,6 +92,15 @@ class Dialogue(State):
                 not DramatisPersonae.should_transit_to(line) and
                 not line.startswith("ISBN"))
 
+    @staticmethod
+    def remove_stage_directions(line):
+        if line.count("/") != 2:
+            return line
+        begining, end = line.find("/"), line.rfind("/")
+        line = line[:begining] + line[end + 1:]
+        line = "".join(line.split())
+        return line
+
     def transition(self, line: str, context) -> State:
         if DramaEnded.should_transit_to(line):
             self.save_dialogue(context)
@@ -141,17 +147,9 @@ class Dialogue(State):
             context.dialogues.append(self.current_dialogue)
 
     def add_line_to_quote(self, line):
-        if line.strip() != "":
+        only_alpha = [char for char in line if char.isalpha()]
+        if line.strip() != "" and only_alpha != []:
             self.current_quote.append(line)
-
-    @staticmethod
-    def remove_stage_directions(line):
-        if line.count("/") != 2:
-            return line
-        begining, end = line.find("/"), line.rfind("/")
-        line = line[:begining] + line[end+1:]
-        line = "".join(line.split())
-        return line
 
 
 class StageDirections(State):
