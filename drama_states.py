@@ -1,6 +1,10 @@
 import abc
 from typing import List
 
+DIALOGUE_TYPE = "IdentifiedDialogue"
+TO_MANY_WORDS = 21
+TO_MANY_LINES = 4
+
 
 class State(metaclass=abc.ABCMeta):
     @staticmethod
@@ -30,7 +34,7 @@ class DramaBeginning(State):
         if WaitingForDialogue.should_transit_to(line):
             return WaitingForDialogue()
         if Dialogue.should_transit_to(line):
-            return Dialogue()
+            return dialogue_factory()
         return self
 
     def handle(self, line: str, context):
@@ -72,7 +76,7 @@ class WaitingForDialogue(State):
         if DramatisPersonae.should_transit_to(line):
             return DramatisPersonae()
         if Dialogue.should_transit_to(line):
-            return Dialogue()
+            return dialogue_factory()
         return self
 
     def handle(self, line: str, context):
@@ -96,8 +100,8 @@ class Dialogue(State):
     def remove_stage_directions(line):
         if line.count("/") != 2:
             return line
-        begining, end = line.find("/"), line.rfind("/")
-        line = line[:begining] + line[end + 1:]
+        beginning, end = line.find("/"), line.rfind("/")
+        line = line[:beginning] + line[end + 1:]
         line = "".join(line.split())
         return line
 
@@ -115,32 +119,42 @@ class Dialogue(State):
         return self
 
     def handle(self, line: str, context):
-        if self.should_transit_to(line) and "".join(self.current_quote).strip() != "":  # next actor
+        if self.should_transit_to(line):  # next actor
             self.add_quote_to_dialogue()
-            self.current_quote = []
+            self.initialize_quote(line)
         if not self.should_transit_to(line) and not StageDirections.single_line_stage_directions(line):
             cleared_line = self.remove_stage_directions(line.strip())
             self.add_line_to_quote(cleared_line)
             if self.to_long_monologue():
                 self.long_monologue = True
 
-    def to_long_monologue(self):
+    def initialize_quote(self, line=None):
+        """Initializes empty quote"""
+        self.current_quote = []
+
+    def to_long_monologue(self, quote=None):
+        """Marks dialogue as to long if it has at least TO_MANY_LINES lines or TO_MANY_WORDS words."""
         def words_count(quote: List[str]):
             return sum(len(line.split()) for line in quote)
-        quote = self.current_quote
-        if len(quote) > 3 or words_count(quote) > 20:
+        if quote is None:
+            quote = self.current_quote
+        if len(quote) >= TO_MANY_LINES or words_count(quote) >= TO_MANY_WORDS:
             return True
         return False
 
     def add_quote_to_dialogue(self):
-        if not self.to_long_monologue():
-            for line_idx, line in enumerate(self.current_quote[1:]):
-                line_idx += 1
-                if self.current_quote[line_idx-1][-1] != '.':
-                    line = line[0].lower() + line[1:]
-                line = " " + line
-                self.current_quote[line_idx] = line
+        if not self.to_long_monologue() and "".join(self.current_quote).strip() != "":
+            for line_idx, line in enumerate(self.dialogue_subsequent_lines()):
+                self.lower_subsequent_lines_in_dialogue(line, line_idx)
             self.current_dialogue.append("".join(self.current_quote))
+
+    def lower_subsequent_lines_in_dialogue(self, line, line_idx):
+        """Lowers uppercase and add spaces to subsequent lines of multi-line dialogue"""
+        line_idx += 1
+        if self.current_quote[line_idx - 1][-1] != '.':
+            line = line[0].lower() + line[1:]
+        line = " " + line
+        self.current_quote[line_idx] = line
 
     def save_dialogue(self, context):
         if self.current_dialogue != []:
@@ -150,6 +164,30 @@ class Dialogue(State):
         only_alpha = [char for char in line if char.isalpha()]
         if line.strip() != "" and only_alpha != []:
             self.current_quote.append(line)
+
+    def dialogue_subsequent_lines(self):
+        """Returns all but first lines of dialogue"""
+        return self.current_quote[1:]
+
+
+class IdentifiedDialogue(Dialogue):
+    def to_long_monologue(self, quote=None):
+        """Marks dialogue as to long if it has at least TO_MANY_LINES lines or TO_MANY_WORDS words.
+        Identifier is not counted as part of dialogue."""
+        return super().to_long_monologue(self.current_quote[1:])
+
+    def lower_subsequent_lines_in_dialogue(self, line, line_idx):
+        """Lowers uppercase and add spaces to subsequent lines of multi-line dialogue"""
+        return super().lower_subsequent_lines_in_dialogue(line, line_idx + 1)
+
+    def initialize_quote(self, line=None):
+        """Initializes new quote with name of current speaker"""
+        line = "_".join(line.split()) + ":"
+        self.current_quote = [line]
+
+    def dialogue_subsequent_lines(self):
+        """Returns all but first lines of dialogue (without identifier)"""
+        return self.current_quote[2:]
 
 
 class StageDirections(State):
@@ -187,3 +225,10 @@ class DramaEnded(State):
 
     def handle(self, line: str, context):
         pass
+
+
+def dialogue_factory():
+    if DIALOGUE_TYPE == "Dialogue":
+        return Dialogue()
+    if DIALOGUE_TYPE == "IdentifiedDialogue":
+        return IdentifiedDialogue()
