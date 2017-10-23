@@ -28,22 +28,37 @@ class DramaContext:
                   f"(złożonych z {sum(len(dialogue) for dialogue in self.dialogues)} wypowiedzi)")
 
 
-def extract_dialogues(folder_path="dramas", output_file="drama_quotes.txt"):
-    dialogues = []
+def fix_folder_path(folder_path):
     if not folder_path.endswith("/") or not folder_path.endswith("\\"):
         slash = "/"
         if "\\" in folder_path:
             slash = "\\"
         folder_path = folder_path + slash
+    return folder_path
+
+
+def save_dialogues_to_file(file_path, dialogues, book_path):
+    if len(dialogues) == 0:
+        return
+    with open(file_path, "a", encoding="utf8") as file:
+        book_title = ".".join(book_path.split(".")[:-1])
+        file.write(f'#book = "{book_title}"\n')
+        for quote in dialogues:
+            file.write("\n".join(quote) + "\n\n")
+
+
+def extract_dialogues(folder_path="dramas", output_file="drama_quotes.txt", dialogue_type="IdentifiedDialogue"):
+    drama_states.DIALOGUE_TYPE = dialogue_type
+    all_dialogues = []
+    folder_path = fix_folder_path(folder_path)
     for drama_path in os.listdir(folder_path):
         drama = DramaContext(folder_path + drama_path)
         drama.process_drama()
-        dialogues += drama.get_quotes()
-    print(f"Znaleziono {len(dialogues)} dialogów "
-          f"(złożonych z {sum(len(dialogue) for dialogue in dialogues)} wypowiedzi)")
-    with open(output_file, "w", encoding="utf8") as file:
-        for quote in dialogues:
-            file.write(str(quote) + "\n")
+        dialogues = drama.get_quotes()
+        all_dialogues += dialogues
+        save_dialogues_to_file(output_file, dialogues, drama_path)
+    print(f"Znaleziono {len(all_dialogues)} dialogów "
+          f"(złożonych z {sum(len(dialogue) for dialogue in all_dialogues)} wypowiedzi)")
 
 
 if __name__ == "__main__":
