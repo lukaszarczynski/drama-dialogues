@@ -143,10 +143,13 @@ class Dialogue(State):
         return False
 
     def add_quote_to_dialogue(self):
-        if not self.to_long_monologue() and "".join(self.current_quote).strip() != "":
+        if not self.to_long_monologue() and not self.empty_quote(self.current_quote):
             for line_idx, line in enumerate(self.dialogue_subsequent_lines()):
                 self.lower_subsequent_lines_in_dialogue(line, line_idx)
             self.current_dialogue.append("".join(self.current_quote))
+
+    def empty_quote(self, quote):
+        return "".join(quote).strip() == ""
 
     def lower_subsequent_lines_in_dialogue(self, line, line_idx):
         """Lowers uppercase and add spaces to subsequent lines of multi-line dialogue"""
@@ -179,6 +182,9 @@ class IdentifiedDialogue(Dialogue):
     def lower_subsequent_lines_in_dialogue(self, line, line_idx):
         """Lowers uppercase and add spaces to subsequent lines of multi-line dialogue"""
         return super().lower_subsequent_lines_in_dialogue(line, line_idx + 1)
+
+    def empty_quote(self, quote):
+        return super().empty_quote(quote[1:])
 
     def initialize_quote(self, line=None):
         """Initializes new quote with name of current speaker"""
